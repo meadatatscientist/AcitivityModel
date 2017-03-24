@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Assignment Report"
 author: "jpapmeier"
-date: "19 März 2017"
+date: "19 MÃ¤rz 2017"
 output: html_document
 ---
 
