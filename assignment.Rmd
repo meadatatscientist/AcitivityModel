@@ -1,0 +1,103 @@
+---
+title: "Practical Machine Learning Assignment Report"
+author: "jpapmeier"
+date: "19 März 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+
+
+library(pander)
+```
+
+## Summary
+
+This report will document how I build a model to verify if a barbell lift was made correct or one of four common errors was made.
+The Model is based on data from a weight lifting exercise with several sensors. Therefore these sensors would be necessary again to determin if the barbell lift was made correct. This limits the use of the created model.
+
+## Getting and cleaning the data
+
+A Description of the generation of the dataset and the raw data can be found [here](http://groupware.les.inf.puc-rio.br/har). For this assignement we were provided with a reduced dataset, which we have to load.
+
+```{r get_data}
+pml <- read.csv("pml-training.csv")
+```
+
+The dataset consists of `r nrow(pml)` rows and `r ncol(pml)` columns. The first seven columns contain metadata, these will be omitted. The last column "classe" contains the classification of the exercise. This is the value we are going to predict. Since several of the columns contain missing values, we exclude these as well. While we will transform, all but the class variable to numeric.
+
+```{r clean_data}
+
+reduced <- pml[ , -c(1:7)]
+for(i in 1:(ncol(reduced)-1)){
+  if(class(reduced[,i]) != "numeric")
+    reduced[,i] <- as.numeric(reduced[,i])
+}
+col.na <- colSums(sapply(reduced, is.na))
+reduced <- reduced[,col.na == 0]
+pander(dim(reduced))
+```
+
+## Building the model
+
+On this reduced dataset we can now build the model. To do this we will first split the dataset in a training and a test set.
+
+```{r split_data}
+library(caret)
+set.seed(13498123)
+
+inTrain <- createDataPartition(reduced$classe, p=0.8, list=FALSE)
+
+train <- reduced[inTrain,]
+test <- reduced[-inTrain,]
+```
+
+I will build the model with the random forest method with an 10-fold cross validation.
+
+
+```{r build_model}
+library(parallel)
+library(doParallel)
+
+cluster <- makeCluster(detectCores() -1 )
+registerDoParallel(cluster)
+
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+
+fit <- train(classe ~ .,
+             data = train,
+             method="rf",
+             trControl = fitControl)
+
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+## Characteristics of the model
+
+Lets have a look at the model:
+
+```{r characteristics}
+varImpPlot(fit$finalModel)
+pander(fit$finalModel$confusion)
+```
+
+The error rate in the confusion table looks pretty low. But the model was build on these cases.
+
+## Testing the model
+
+Since we used cross validation we have to estimate the out of sample error on another dataset. For this we have set asside 20% of the original data earlier.
+
+```{r OOSample_error}
+predictions <- predict(fit, test)
+cm <- confusionMatrix(predictions,test$classe)
+pander(cm$overall)
+pander(cm$table)
+```
+
+With a predicted accuracy of over 99% the model seems to be a pretty good fit.
